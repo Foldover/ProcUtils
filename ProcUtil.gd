@@ -20,27 +20,27 @@ static func _fade(t):
 
 static func _lerp(t, a, b):
 	return a + t * (b - a)
-	
+
 static func _grad(h, x, y, z):
 	var hh = h & 15
 	var u = x if hh < 8 else y
 	var v = y if hh < 4 else x if hh == 12 or hh == 14 else z
-	
+
 	return ((u if hh & 1 == 0 else -u) + (v if hh & 2 == 0 else -v))
 
 func PerlinNoise(x, y, z):
 	var X = int(floor(x)) & 255
 	var Y = int(floor(y)) & 255
 	var Z = int(floor(z)) & 255
-	
+
 	x -= floor(x)
 	y -= floor(y)
 	z -= floor(z)
-	
+
 	var u = _fade(x)
 	var v = _fade(y)
 	var w = _fade(z)
-	
+
 	var A = p[X] + Y
 	var AA = p[A] + Z
 	var AB = p[A + 1] + Z
@@ -94,14 +94,14 @@ func AsteroidalBombardment(map, width, height, n_ast, min_size, max_size, min_fo
 					ry = height + y
 				else:
 					ry = y
-					
+
 				if(x >= width):
 					rx = x - width
 				elif(x < 0):
 					rx = width + x
 				else:
 					rx = x
-					
+
 				var forceMod = sqrt((x - impactPos[0])*(x - impactPos[0]) + (y - impactPos[1])*(y - impactPos[1])) / R
 				if(forceMod > 1.0):
 					forceMod = 1.0
@@ -115,7 +115,7 @@ func AsteroidalBombardment(map, width, height, n_ast, min_size, max_size, min_fo
 func HydraulicErosion(map, width, height, millenias, water, solubility, evap, capacity):
 	var waterMap = MapZero2D(width, height)
 	var sedimentMap = MapZero2D(width, height)
-	
+
 	for p in range(millenias):
 		for x in range(width):
 			for y in range(height):
@@ -123,59 +123,73 @@ func HydraulicErosion(map, width, height, millenias, water, solubility, evap, ca
 				var dissSed = solubility * waterMap[x][y]
 				sedimentMap[x][y] += dissSed
 				map[x][y] -= dissSed
-				
+
 		for x in range(width):
 			for y in range(height):
-				var alt = map[x][y] + waterMap[x][y]
-				var da = alt - (((map[x-1 if x-1 >= 0 else width-1][y] + waterMap[x-1 if x-1 >= 0 else width-1][y]) + 
-								(map[x+1 if x+1 < width else 0][y] + waterMap[x+1 if x+1 < width else 0][y]) +
-								(map[x][y-1 if y-1 >= 0 else height-1] + waterMap[x][y-1 if y-1 >= 0 else height-1]) +
-								(map[x][y+1 if y+1 < height else 0] + waterMap[x][y+1 if y+1 < height else 0]))
-								/ 4.0)
-				
-				var d1 = alt - (map[x-1 if x-1 >= 0 else width-1][y] + waterMap[x-1 if x-1 >= 0 else width-1][y])
-				var d2 = alt - (map[x+1 if x+1 < width else 0][y] + waterMap[x+1 if x+1 < width else 0][y])
-				var d3 = alt - (map[x][y-1 if y-1 >= 0 else height-1] + waterMap[x][y-1 if y-1 >= 0 else height-1])
-				var d4 = alt - (map[x][y+1 if y+1 < height else 0] + waterMap[x][y+1 if y+1 < height else 0])
+				var alt = map[x][y] + waterMap[x][y] + sedimentMap[x][y]
+				var l = x-1 if x-1 >= 0 else width-1
+				var r = x+1 if x+1 < width else 0
+				var u = y-1 if y-1 >= 0 else height-1
+				var d = y+1 if y+1 < height else 0
+
+				var na1 = map[l][y] + waterMap[l][y]
+				var na2 = map[r][y] + waterMap[r][y]
+				var na3 = map[x][u] + waterMap[x][u]
+				var na4 = map[x][d] + waterMap[x][d]
+
+				var d1 = alt - na1
+				var d2 = alt - na2
+				var d3 = alt - na3
+				var d4 = alt - na4
+
+				var active = 1.0 if na1 > 0 else 0 + 1.0 if na2 > 0 else 0 + 1.0 if na3 > 0 else 0 + 1.0 if na4 > 0 else 0
+
+
+				var da = (alt - ((na1 if na1 > 0 else 0.0 + na2 if na2 > 0 else 0.0 + na3 if na3 > 0 else 0.0 + na4 if na4 > 0 else 0.0) / active)) if active > 0 else 0
+
 				var dtot = (d1 if d1 > 0 else 0) + (d2 if d2 > 0 else 0) + (d3 if d3 > 0 else 0) + (d4 if d4 > 0 else 0)
-				
+
 				var movWater
 				var movSed
-				
+
 				if d1 > 0:
 					movWater = min(waterMap[x][y], da) * (d1/dtot)
 					movSed = sedimentMap[x][y] * (movWater/waterMap[x][y])
-					waterMap[x-1 if x-1 >= 0 else width-1][y] += movWater
-					sedimentMap[x-1 if x-1 >= 0 else width-1][y] += movSed
+					waterMap[l][y] += movWater
+					waterMap[x][y] -= movWater
+					sedimentMap[l][y] += movSed
 					sedimentMap[x][y] -= movSed
-				
+
 				if d2 > 0:
 					movWater = min(waterMap[x][y], da) * (d2/dtot)
 					movSed = sedimentMap[x][y] * (movWater/waterMap[x][y])
-					waterMap[x+1 if x+1 < width else 0][y] += movWater
-					sedimentMap[x+1 if x+1 < width else 0][y] += movSed
+					waterMap[r][y] += movWater
+					waterMap[x][y] -= movWater
+					sedimentMap[r][y] += movSed
 					sedimentMap[x][y] -= movSed
-				
+
 				if d3 > 0:
 					movWater = min(waterMap[x][y], da) * (d3/dtot)
 					movSed = sedimentMap[x][y] * (movWater/waterMap[x][y])
-					waterMap[x][y-1 if y-1 >= 0 else height-1] += movWater
-					sedimentMap[x][y-1 if y-1 >= 0 else height-1] += movSed
+					waterMap[x][u] += movWater
+					waterMap[x][y] -= movWater
+					sedimentMap[x][u] += movSed
 					sedimentMap[x][y] -= movSed
-				
+
 				if d4 > 0:
 					movWater = min(waterMap[x][y], da) * (d4/dtot)
 					movSed = sedimentMap[x][y] * (movWater/waterMap[x][y])
-					waterMap[x][y+1 if y+1 < height else 0] += movWater
-					sedimentMap[x][y+1 if y+1 < height else 0] += movSed
+					waterMap[x][d] += movWater
+					waterMap[x][y] -= movWater
+					sedimentMap[x][d] += movSed
 					sedimentMap[x][y] -= movSed
-				
+
 				waterMap[x][y] = waterMap[x][y] * (1.0 - evap)
 				var maxSedMov = capacity * waterMap[x][y]
 				var dsed = max(0, sedimentMap[x][y] - maxSedMov)
 				sedimentMap[x][y] -= dsed
 				map[x][y] += dsed
-				
+
 		for x in range(width):
 			for y in range(height):
 				map[x][y] += sedimentMap[x][y]
@@ -195,12 +209,12 @@ func MapOne2D(X, Y):
 		for y in range(Y):
 			map[x].push_back(1.0)
 	return map
-	
+
 func ScaleMap(map, width, height, coeff):
 	for x in range(width):
 		for y in range(height):
 			map[x][y] *= coeff
-	
+
 func NormalizeMap(map, width, height):
 	var maxValue = -2147483647.0
 	var neg = 0
@@ -210,11 +224,11 @@ func NormalizeMap(map, width, height):
 				maxValue = map[x][y]
 			if map[x][y] < neg:
 				neg = map[x][y]
-				
+
 	for x in range(width):
 		for y in range(height):
 			map[x][y] = (map[x][y] + neg) / (maxValue + neg)
-			
+
 func _ready():
 	for i in range(256):
 		p[i] = permutation[i]
